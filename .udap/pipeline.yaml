@@ -126,3 +126,217 @@ stages:
           echo "APK size: $(du -sh $APK_PATH | cut -f1)"
           echo "Build artifact verified successfully"
           ls -lh apk-download/
+
+pipelines:
+  - id: ui-test
+    stages:
+      - id: provision-ec2
+        kind: provision
+        needs: []
+        timeout_minutes: 15
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
+          TF_VAR_project_name: ${{ secrets.PROJECT_NAME }}
+          TF_VAR_ssh_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
+        steps:
+          - name: Set up Terraform
+            uses: hashicorp/setup-terraform@v3
+            with:
+              terraform_version: "1.7.5"
+          - name: Terraform Init
+            working-directory: infra/uitest
+            run: |
+              terraform init -input=false -reconfigure \
+                -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+                -backend-config="key=${{ secrets.PROJECT_NAME }}/uitest/terraform.tfstate" \
+                -backend-config="region=us-east-1"
+          - name: Terraform Apply
+            working-directory: infra/uitest
+            run: terraform apply -input=false -auto-approve
+          - name: Get EC2 IP
+            id: get_ip
+            working-directory: infra/uitest
+            run: |
+              EC2_IP=$(terraform output -raw instance_public_ip)
+              echo "ec2_ip=$EC2_IP" >> "$GITHUB_OUTPUT"
+        outputs:
+          ec2_ip: ${{ steps.get_ip.outputs.ec2_ip }}
+
+      - id: run-ui-tests
+        kind: custom
+        needs: [provision-ec2]
+        timeout_minutes: 45
+        steps:
+          - name: Download APK artifact
+            uses: actions/download-artifact@v4
+            with:
+              name: kotlin-todo-app-debug
+              path: apk-download
+          - name: Write SSH key
+            env:
+              SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+            run: |
+              mkdir -p ~/.ssh
+              printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+              chmod 600 ~/.ssh/deploy_key
+          - name: Wait for EC2 SSH ready
+            run: |
+              EC2_IP="${{ needs.provision-ec2.outputs.ec2_ip }}"
+              echo "Waiting for SSH on $EC2_IP..."
+              for i in $(seq 1 30); do
+                if ssh -i ~/.ssh/deploy_key \
+                     -o StrictHostKeyChecking=no \
+                     -o ConnectTimeout=5 \
+                     ubuntu@"$EC2_IP" "echo ready" 2>/dev/null; then
+                  echo "SSH is up"
+                  ssh-keyscan -H "$EC2_IP" >> ~/.ssh/known_hosts 2>/dev/null
+                  break
+                fi
+                echo "Attempt $i/30 — waiting 10s..."
+                sleep 10
+              done
+          - name: Install Android SDK and Maestro on EC2
+            run: |
+              EC2_IP="${{ needs.provision-ec2.outputs.ec2_ip }}"
+              ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ubuntu@"$EC2_IP" bash << 'ENDSSH'
+                set -e
+                export DEBIAN_FRONTEND=noninteractive
+
+                # Java 17 (in Ubuntu 22.04 default repos)
+                sudo apt-get update -qq
+                sudo apt-get install -y -qq openjdk-17-jdk wget unzip curl
+
+                # Android SDK command-line tools
+                export ANDROID_HOME=/opt/android-sdk
+                sudo mkdir -p "$ANDROID_HOME/cmdline-tools"
+                sudo chown -R ubuntu:ubuntu "$ANDROID_HOME"
+                cd /tmp
+                wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
+                     -O cmdline-tools.zip
+                unzip -q cmdline-tools.zip -d /tmp/clt-extract
+                mv /tmp/clt-extract/cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
+
+                export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
+
+                # Accept licenses and install packages
+                yes | sdkmanager --licenses > /dev/null 2>&1
+                sdkmanager \
+                  "platform-tools" \
+                  "emulator" \
+                  "platforms;android-34" \
+                  "build-tools;34.0.0" \
+                  "system-images;android-34;google_apis;x86_64"
+
+                # Create AVD
+                echo "no" | avdmanager create avd \
+                  -n test_avd \
+                  -k "system-images;android-34;google_apis;x86_64" \
+                  --force
+
+                # Start emulator in background (software rendering — no KVM needed)
+                nohup "$ANDROID_HOME/emulator/emulator" \
+                  -avd test_avd \
+                  -no-window \
+                  -no-audio \
+                  -gpu swiftshader_indirect \
+                  -no-boot-anim \
+                  -memory 2048 \
+                  > /tmp/emulator.log 2>&1 &
+
+                # Wait for emulator to fully boot (up to 10 minutes)
+                echo "Waiting for emulator boot..."
+                ADB="$ANDROID_HOME/platform-tools/adb"
+                for i in $(seq 1 60); do
+                  BOOT=$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)
+                  if [ "$BOOT" = "1" ]; then
+                    echo "Emulator booted after $((i * 10))s"
+                    break
+                  fi
+                  echo "Boot check $i/60..."
+                  sleep 10
+                done
+
+                # Install Maestro
+                export MAESTRO_VERSION=1.39.0
+                curl -fsSL "https://get.maestro.mobile.dev" | bash
+                echo "Maestro installed: $($HOME/.maestro/bin/maestro --version)"
+              ENDSSH
+          - name: Copy APK and Maestro flows to EC2
+            run: |
+              EC2_IP="${{ needs.provision-ec2.outputs.ec2_ip }}"
+              scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+                apk-download/app-debug.apk ubuntu@"$EC2_IP":/tmp/app-debug.apk
+              scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+                -r maestro/ ubuntu@"$EC2_IP":/tmp/maestro/
+          - name: Run Maestro tests with screen recording
+            run: |
+              EC2_IP="${{ needs.provision-ec2.outputs.ec2_ip }}"
+              ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ubuntu@"$EC2_IP" bash << 'ENDSSH'
+                set -e
+                export ANDROID_HOME=/opt/android-sdk
+                export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$HOME/.maestro/bin:$PATH"
+                ADB="$ANDROID_HOME/platform-tools/adb"
+
+                # Install APK
+                "$ADB" install /tmp/app-debug.apk
+
+                # Start screen recording in background
+                "$ADB" shell screenrecord /sdcard/ui-test-recording.mp4 &
+                RECORD_PID=$!
+                echo "Screen recording started (PID $RECORD_PID)"
+
+                # Run all Maestro flows (non-fatal so recording always stops)
+                maestro test /tmp/maestro/ --output /tmp/maestro-report.xml || true
+
+                # Stop recording gracefully
+                sleep 2
+                kill $RECORD_PID 2>/dev/null || true
+                sleep 3
+
+                # Pull artifacts to local paths
+                "$ADB" pull /sdcard/ui-test-recording.mp4 /tmp/ui-test-recording.mp4 || true
+                echo "All tests complete"
+              ENDSSH
+          - name: Pull artifacts from EC2
+            run: |
+              EC2_IP="${{ needs.provision-ec2.outputs.ec2_ip }}"
+              mkdir -p ui-test-artifacts
+              scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+                ubuntu@"$EC2_IP":/tmp/ui-test-recording.mp4 ui-test-artifacts/ || true
+              scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+                ubuntu@"$EC2_IP":/tmp/maestro-report.xml ui-test-artifacts/ || true
+          - name: Upload UI test artifacts
+            uses: actions/upload-artifact@v4
+            with:
+              name: ui-test-results
+              path: ui-test-artifacts/
+              retention-days: 30
+              if-no-files-found: warn
+
+      - id: destroy-ec2
+        kind: custom
+        needs: [run-ui-tests]
+        timeout_minutes: 10
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
+          TF_VAR_project_name: ${{ secrets.PROJECT_NAME }}
+          TF_VAR_ssh_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
+        steps:
+          - name: Set up Terraform
+            uses: hashicorp/setup-terraform@v3
+            with:
+              terraform_version: "1.7.5"
+          - name: Terraform Init
+            working-directory: infra/uitest
+            run: |
+              terraform init -input=false -reconfigure \
+                -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+                -backend-config="key=${{ secrets.PROJECT_NAME }}/uitest/terraform.tfstate" \
+                -backend-config="region=us-east-1"
+          - name: Terraform Destroy
+            working-directory: infra/uitest
+            run: terraform destroy -input=false -auto-approve

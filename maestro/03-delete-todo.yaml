@@ -1,0 +1,17 @@
+appId: com.example.kotlintodo
+---
+# Flow 3: Add a todo then delete it, verify it disappears
+- launchApp
+- tapOn:
+    id: "com.example.kotlintodo:id/editTextTodo"
+- inputText: "Take out trash"
+- tapOn:
+    id: "com.example.kotlintodo:id/buttonAdd"
+- assertVisible: "Take out trash"
+
+# Tap the delete button
+- tapOn:
+    id: "com.example.kotlintodo:id/buttonDelete"
+
+# Item should be gone
+- assertNotVisible: "Take out trash"

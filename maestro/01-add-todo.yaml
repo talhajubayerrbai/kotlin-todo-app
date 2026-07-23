@@ -1,0 +1,20 @@
+appId: com.example.kotlintodo
+---
+# Flow 1: Add a new todo item and verify it appears in the list
+- launchApp
+- assertVisible: "What needs to be done?"
+- tapOn:
+    id: "com.example.kotlintodo:id/editTextTodo"
+- inputText: "Buy groceries"
+- tapOn:
+    id: "com.example.kotlintodo:id/buttonAdd"
+- assertVisible: "Buy groceries"
+
+# Add a second item
+- tapOn:
+    id: "com.example.kotlintodo:id/editTextTodo"
+- inputText: "Walk the dog"
+- tapOn:
+    id: "com.example.kotlintodo:id/buttonAdd"
+- assertVisible: "Walk the dog"
+- assertVisible: "Buy groceries"

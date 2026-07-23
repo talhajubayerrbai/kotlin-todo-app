@@ -1,0 +1,17 @@
+appId: com.example.kotlintodo
+---
+# Flow 2: Add a todo then mark it as completed via the checkbox
+- launchApp
+- tapOn:
+    id: "com.example.kotlintodo:id/editTextTodo"
+- inputText: "Read a book"
+- tapOn:
+    id: "com.example.kotlintodo:id/buttonAdd"
+- assertVisible: "Read a book"
+
+# Tap the checkbox to mark as completed
+- tapOn:
+    id: "com.example.kotlintodo:id/checkboxCompleted"
+
+# Item should still be visible (completed state, not deleted)
+- assertVisible: "Read a book"
