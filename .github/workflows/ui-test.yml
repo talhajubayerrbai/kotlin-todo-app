@@ -86,67 +86,75 @@ jobs:
         SSH is up\"\n    ssh-keyscan -H \"$EC2_IP\" >> ~/.ssh/known_hosts 2>/dev/null\n\
         \    break\n  fi\n  echo \"Attempt $i/30 \u2014 waiting 10s...\"\n  sleep\
         \ 10\ndone\n"
-    - name: "Idempotent setup \u2014 Android SDK + emulator + Maestro"
+    - name: "Idempotent setup \u2014 Android SDK + arm64 emulator + Maestro"
       run: "EC2_IP=\"${{ needs.provision-ec2.outputs.ec2_ip }}\"\nssh -i ~/.ssh/deploy_key\
         \ -o StrictHostKeyChecking=no ubuntu@\"$EC2_IP\" bash << 'ENDSSH'\n  set -e\n\
-        \  export ANDROID_HOME=/opt/android-sdk\n  export PATH=\"$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$HOME/.maestro/bin:$PATH\"\
+        \  export ANDROID_HOME=/opt/android-sdk\n  SDKMANAGER=\"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager\"\
+        \n  AVDMANAGER=\"$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager\"\n  ADB=\"\
+        $ANDROID_HOME/platform-tools/adb\"\n  export PATH=\"$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$HOME/.maestro/bin:$PATH\"\
         \n\n  # \u2500\u2500 Java 17 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
         \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
         \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
         \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
         \u2500\n  if ! java -version 2>&1 | grep -q '17'; then\n    export DEBIAN_FRONTEND=noninteractive\n\
         \    sudo apt-get update -qq\n    sudo apt-get install -y -qq openjdk-17-jdk\
-        \ wget unzip curl libpulse0 libnss3\n  fi\n\n  # \u2500\u2500 Android SDK\
-        \ command-line tools \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
+        \ wget unzip curl libpulse0 libnss3\n    echo \"Java 17 installed\"\n  else\n\
+        \    echo \"Java 17 already present \u2014 skipping\"\n  fi\n\n  # \u2500\u2500\
+        \ Android SDK command-line tools \u2500\u2500\u2500\u2500\u2500\u2500\u2500\
         \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
-        \u2500\u2500\u2500\n  if [ ! -f \"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager\"\
-        \ ]; then\n    sudo mkdir -p \"$ANDROID_HOME/cmdline-tools\"\n    sudo chown\
-        \ -R ubuntu:ubuntu \"$ANDROID_HOME\"\n    cd /tmp\n    wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip\
+        \u2500\u2500\u2500\u2500\u2500\n  if [ ! -f \"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager\"\
+        \ ]; then\n    sudo mkdir -p \"$ANDROID_HOME\"\n    sudo chown -R ubuntu:ubuntu\
+        \ \"$ANDROID_HOME\"\n    cd /tmp\n    wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip\
         \ \\\n         -O cmdline-tools.zip\n    unzip -q cmdline-tools.zip -d /tmp/clt-extract\n\
         \    mv /tmp/clt-extract/cmdline-tools \"$ANDROID_HOME/cmdline-tools/latest\"\
         \n    echo \"Android SDK cmdline-tools installed\"\n  else\n    echo \"Android\
         \ SDK cmdline-tools already present \u2014 skipping\"\n  fi\n\n  # \u2500\u2500\
-        \ SDK packages: platform-tools, emulator, arm64 system image \u2500\u2500\n\
-        \  # arm64-v8a runs via QEMU TCG \u2014 no KVM needed on t3.large\n  if [\
-        \ ! -d \"$ANDROID_HOME/platform-tools\" ]; then\n    yes | sdkmanager --licenses\
-        \ > /dev/null 2>&1\n    sdkmanager \\\n      \"platform-tools\" \\\n     \
-        \ \"emulator\" \\\n      \"platforms;android-34\" \\\n      \"build-tools;34.0.0\"\
-        \ \\\n      \"system-images;android-34;google_apis;arm64-v8a\"\n    echo \"\
-        SDK packages installed (arm64-v8a system image)\"\n  else\n    echo \"SDK\
-        \ packages already present \u2014 skipping\"\n  fi\n\n  # \u2500\u2500 AVD\
-        \ \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
+        \ arm64-v8a system image (the key idempotency gate) \u2500\u2500\u2500\u2500\
+        \u2500\u2500\n  # x86_64 requires KVM \u2014 not available on t3.large\n \
+        \ # arm64-v8a runs via QEMU TCG \u2014 no KVM needed\n  ARM64_SYSIMG=\"$ANDROID_HOME/system-images/android-34/google_apis/arm64-v8a\"\
+        \n  if [ ! -d \"$ARM64_SYSIMG\" ]; then\n    echo \"arm64-v8a system image\
+        \ not found \u2014 installing all SDK packages...\"\n    sudo chown -R ubuntu:ubuntu\
+        \ \"$ANDROID_HOME\"\n    yes | \"$SDKMANAGER\" --licenses > /dev/null 2>&1\
+        \ || true\n    \"$SDKMANAGER\" \\\n      \"platform-tools\" \\\n      \"emulator\"\
+        \ \\\n      \"platforms;android-34\" \\\n      \"build-tools;34.0.0\" \\\n\
+        \      \"system-images;android-34;google_apis;arm64-v8a\"\n    echo \"arm64-v8a\
+        \ system image installed\"\n  else\n    echo \"arm64-v8a system image already\
+        \ installed \u2014 skipping SDK install\"\n  fi\n\n  # \u2500\u2500 AVD: force\
+        \ arm64 \u2014 recreate if missing or pointing at x86_64 \u2500\u2500\n  AVD_SYSDIR=$(grep\
+        \ 'image.sysdir' \"$HOME/.android/avd/test_avd.avd/config.ini\" 2>/dev/null\
+        \ || echo \"none\")\n  if echo \"$AVD_SYSDIR\" | grep -q 'x86_64'; then\n\
+        \    echo \"Existing AVD uses x86_64 \u2014 recreating as arm64-v8a...\"\n\
+        \    \"$AVDMANAGER\" delete avd -n test_avd 2>/dev/null || true\n    AVD_SYSDIR=\"\
+        none\"\n  fi\n  if ! \"$AVDMANAGER\" list avd 2>/dev/null | grep -q 'test_avd';\
+        \ then\n    echo \"no\" | \"$AVDMANAGER\" create avd \\\n      -n test_avd\
+        \ \\\n      -k \"system-images;android-34;google_apis;arm64-v8a\" \\\n   \
+        \   --device \"pixel_4\" \\\n      --force\n    echo \"AVD test_avd created\
+        \ (arm64-v8a)\"\n  else\n    echo \"AVD test_avd (arm64-v8a) already exists\
+        \ \u2014 skipping\"\n  fi\n\n  # \u2500\u2500 Emulator: start only if not\
+        \ already running \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
+        \u2500\u2500\n  DEVICES=$(\"$ADB\" devices 2>/dev/null | grep -v \"List of\"\
+        \ | grep -v \"^$\" | grep \"emulator\" || true)\n  if [ -z \"$DEVICES\" ];\
+        \ then\n    echo \"Starting arm64 emulator (QEMU TCG \u2014 no KVM required)...\"\
+        \n    nohup \"$ANDROID_HOME/emulator/emulator\" \\\n      -avd test_avd \\\
+        \n      -no-window \\\n      -no-audio \\\n      -no-boot-anim \\\n      -memory\
+        \ 3072 \\\n      -gpu swiftshader_indirect \\\n      > /tmp/emulator.log 2>&1\
+        \ &\n    echo \"Waiting for emulator boot (up to 15 min)...\"\n    for i in\
+        \ $(seq 1 90); do\n      BOOT=$(\"$ADB\" shell getprop sys.boot_completed\
+        \ 2>/dev/null | tr -d '\\r' || true)\n      if [ \"$BOOT\" = \"1\" ]; then\n\
+        \        echo \"Emulator booted after $((i * 10))s\"\n        \"$ADB\" shell\
+        \ input keyevent 82\n        break\n      fi\n      if [ \"$i\" = \"90\" ];\
+        \ then\n        echo \"ERROR: Emulator did not boot within 15 minutes\"\n\
+        \        tail -30 /tmp/emulator.log\n        exit 1\n      fi\n      echo\
+        \ \"Boot check $i/90...\"\n      sleep 10\n    done\n  else\n    echo \"Emulator\
+        \ already running: $DEVICES \u2014 skipping start\"\n  fi\n\n  # \u2500\u2500\
+        \ Maestro \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
         \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
         \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
-        \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
-        \u2500\n  if ! \"$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager\" list\
-        \ avd 2>/dev/null | grep -q 'test_avd'; then\n    echo \"no\" | \"$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager\"\
-        \ create avd \\\n      -n test_avd \\\n      -k \"system-images;android-34;google_apis;arm64-v8a\"\
-        \ \\\n      --force\n    echo \"AVD created (arm64-v8a)\"\n  else\n    echo\
-        \ \"AVD test_avd already exists \u2014 skipping\"\n  fi\n\n  # \u2500\u2500\
-        \ Emulator: always check adb devices, start if not running \u2500\u2500\n\
-        \  ADB=\"$ANDROID_HOME/platform-tools/adb\"\n  DEVICES=$(\"$ADB\" devices\
-        \ 2>/dev/null | grep -v \"List of\" | grep -v \"^$\" | grep \"emulator\" ||\
-        \ true)\n  if [ -z \"$DEVICES\" ]; then\n    echo \"Emulator not running \u2014\
-        \ starting (arm64 QEMU TCG, no KVM required)...\"\n    nohup \"$ANDROID_HOME/emulator/emulator\"\
-        \ \\\n      -avd test_avd \\\n      -no-window \\\n      -no-audio \\\n  \
-        \    -no-boot-anim \\\n      -memory 3072 \\\n      > /tmp/emulator.log 2>&1\
-        \ &\n    echo \"Waiting for emulator boot (up to 15 min \u2014 arm64 QEMU\
-        \ is slower)...\"\n    for i in $(seq 1 90); do\n      BOOT=$(\"$ADB\" shell\
-        \ getprop sys.boot_completed 2>/dev/null | tr -d '\\r' || true)\n      if\
-        \ [ \"$BOOT\" = \"1\" ]; then\n        echo \"Emulator booted after $((i *\
-        \ 10))s\"\n        \"$ADB\" shell input keyevent 82\n        break\n     \
-        \ fi\n      if [ \"$i\" = \"90\" ]; then\n        echo \"ERROR: Emulator did\
-        \ not boot within 15 minutes\"\n        cat /tmp/emulator.log | tail -30\n\
-        \        exit 1\n      fi\n      echo \"Boot check $i/90...\"\n      sleep\
-        \ 10\n    done\n  else\n    echo \"Emulator already running: $DEVICES \u2014\
-        \ skipping start\"\n  fi\n\n  # \u2500\u2500 Maestro \u2500\u2500\u2500\u2500\
-        \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
-        \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
-        \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
-        \u2500\u2500\u2500\u2500\u2500\n  if [ ! -f \"$HOME/.maestro/bin/maestro\"\
-        \ ]; then\n    export MAESTRO_VERSION=1.39.0\n    curl -fsSL \"https://get.maestro.mobile.dev\"\
-        \ | bash\n    echo \"Maestro installed\"\n  else\n    echo \"Maestro already\
-        \ installed \u2014 skipping\"\n  fi\n  echo \"Setup complete\"\nENDSSH\n"
+        \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n  if [\
+        \ ! -f \"$HOME/.maestro/bin/maestro\" ]; then\n    export MAESTRO_VERSION=1.39.0\n\
+        \    curl -fsSL \"https://get.maestro.mobile.dev\" | bash\n    echo \"Maestro\
+        \ installed\"\n  else\n    echo \"Maestro already installed \u2014 skipping\"\
+        \n  fi\n  echo \"=== Setup complete ===\"\nENDSSH\n"
     - name: Copy APK and Maestro flows to EC2
       run: "EC2_IP=\"${{ needs.provision-ec2.outputs.ec2_ip }}\"\nssh -i ~/.ssh/deploy_key\
         \ -o StrictHostKeyChecking=no ubuntu@\"$EC2_IP\" \\\n  \"mkdir -p /tmp/maestro\"\

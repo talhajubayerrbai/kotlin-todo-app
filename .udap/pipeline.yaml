@@ -212,12 +212,15 @@ pipelines:
                 echo "Attempt $i/30 — waiting 10s..."
                 sleep 10
               done
-          - name: Idempotent setup — Android SDK + emulator + Maestro
+          - name: Idempotent setup — Android SDK + arm64 emulator + Maestro
             run: |
               EC2_IP="${{ needs.provision-ec2.outputs.ec2_ip }}"
               ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ubuntu@"$EC2_IP" bash << 'ENDSSH'
                 set -e
                 export ANDROID_HOME=/opt/android-sdk
+                SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+                AVDMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
+                ADB="$ANDROID_HOME/platform-tools/adb"
                 export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$HOME/.maestro/bin:$PATH"
 
                 # ── Java 17 ────────────────────────────────────────────────
@@ -225,11 +228,14 @@ pipelines:
                   export DEBIAN_FRONTEND=noninteractive
                   sudo apt-get update -qq
                   sudo apt-get install -y -qq openjdk-17-jdk wget unzip curl libpulse0 libnss3
+                  echo "Java 17 installed"
+                else
+                  echo "Java 17 already present — skipping"
                 fi
 
                 # ── Android SDK command-line tools ─────────────────────────
                 if [ ! -f "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
-                  sudo mkdir -p "$ANDROID_HOME/cmdline-tools"
+                  sudo mkdir -p "$ANDROID_HOME"
                   sudo chown -R ubuntu:ubuntu "$ANDROID_HOME"
                   cd /tmp
                   wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
@@ -241,45 +247,56 @@ pipelines:
                   echo "Android SDK cmdline-tools already present — skipping"
                 fi
 
-                # ── SDK packages: platform-tools, emulator, arm64 system image ──
-                # arm64-v8a runs via QEMU TCG — no KVM needed on t3.large
-                if [ ! -d "$ANDROID_HOME/platform-tools" ]; then
-                  yes | sdkmanager --licenses > /dev/null 2>&1
-                  sdkmanager \
+                # ── arm64-v8a system image (the key idempotency gate) ──────
+                # x86_64 requires KVM — not available on t3.large
+                # arm64-v8a runs via QEMU TCG — no KVM needed
+                ARM64_SYSIMG="$ANDROID_HOME/system-images/android-34/google_apis/arm64-v8a"
+                if [ ! -d "$ARM64_SYSIMG" ]; then
+                  echo "arm64-v8a system image not found — installing all SDK packages..."
+                  sudo chown -R ubuntu:ubuntu "$ANDROID_HOME"
+                  yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+                  "$SDKMANAGER" \
                     "platform-tools" \
                     "emulator" \
                     "platforms;android-34" \
                     "build-tools;34.0.0" \
                     "system-images;android-34;google_apis;arm64-v8a"
-                  echo "SDK packages installed (arm64-v8a system image)"
+                  echo "arm64-v8a system image installed"
                 else
-                  echo "SDK packages already present — skipping"
+                  echo "arm64-v8a system image already installed — skipping SDK install"
                 fi
 
-                # ── AVD ────────────────────────────────────────────────────
-                if ! "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" list avd 2>/dev/null | grep -q 'test_avd'; then
-                  echo "no" | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
+                # ── AVD: force arm64 — recreate if missing or pointing at x86_64 ──
+                AVD_SYSDIR=$(grep 'image.sysdir' "$HOME/.android/avd/test_avd.avd/config.ini" 2>/dev/null || echo "none")
+                if echo "$AVD_SYSDIR" | grep -q 'x86_64'; then
+                  echo "Existing AVD uses x86_64 — recreating as arm64-v8a..."
+                  "$AVDMANAGER" delete avd -n test_avd 2>/dev/null || true
+                  AVD_SYSDIR="none"
+                fi
+                if ! "$AVDMANAGER" list avd 2>/dev/null | grep -q 'test_avd'; then
+                  echo "no" | "$AVDMANAGER" create avd \
                     -n test_avd \
                     -k "system-images;android-34;google_apis;arm64-v8a" \
+                    --device "pixel_4" \
                     --force
-                  echo "AVD created (arm64-v8a)"
+                  echo "AVD test_avd created (arm64-v8a)"
                 else
-                  echo "AVD test_avd already exists — skipping"
+                  echo "AVD test_avd (arm64-v8a) already exists — skipping"
                 fi
 
-                # ── Emulator: always check adb devices, start if not running ──
-                ADB="$ANDROID_HOME/platform-tools/adb"
+                # ── Emulator: start only if not already running ────────────
                 DEVICES=$("$ADB" devices 2>/dev/null | grep -v "List of" | grep -v "^$" | grep "emulator" || true)
                 if [ -z "$DEVICES" ]; then
-                  echo "Emulator not running — starting (arm64 QEMU TCG, no KVM required)..."
+                  echo "Starting arm64 emulator (QEMU TCG — no KVM required)..."
                   nohup "$ANDROID_HOME/emulator/emulator" \
                     -avd test_avd \
                     -no-window \
                     -no-audio \
                     -no-boot-anim \
                     -memory 3072 \
+                    -gpu swiftshader_indirect \
                     > /tmp/emulator.log 2>&1 &
-                  echo "Waiting for emulator boot (up to 15 min — arm64 QEMU is slower)..."
+                  echo "Waiting for emulator boot (up to 15 min)..."
                   for i in $(seq 1 90); do
                     BOOT=$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)
                     if [ "$BOOT" = "1" ]; then
@@ -289,7 +306,7 @@ pipelines:
                     fi
                     if [ "$i" = "90" ]; then
                       echo "ERROR: Emulator did not boot within 15 minutes"
-                      cat /tmp/emulator.log | tail -30
+                      tail -30 /tmp/emulator.log
                       exit 1
                     fi
                     echo "Boot check $i/90..."
@@ -307,7 +324,7 @@ pipelines:
                 else
                   echo "Maestro already installed — skipping"
                 fi
-                echo "Setup complete"
+                echo "=== Setup complete ==="
               ENDSSH
           - name: Copy APK and Maestro flows to EC2
             run: |
