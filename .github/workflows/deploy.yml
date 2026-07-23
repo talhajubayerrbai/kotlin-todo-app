@@ -17,6 +17,10 @@ jobs:
       with:
         java-version: '17'
         distribution: temurin
+    - name: Download Gradle wrapper jar
+      run: "curl -fsSL -o gradle/wrapper/gradle-wrapper.jar \\\n  https://github.com/gradle/gradle/raw/v8.6.0/gradle/wrapper/gradle-wrapper.jar\n\
+        echo \"Gradle wrapper jar downloaded: $(ls -lh gradle/wrapper/gradle-wrapper.jar)\"\
+        \n"
     - name: Accept Android SDK licenses and install platform
       run: 'SDKMANAGER="/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager"
 
@@ -48,6 +52,10 @@ jobs:
       with:
         java-version: '17'
         distribution: temurin
+    - name: Download Gradle wrapper jar
+      run: "curl -fsSL -o gradle/wrapper/gradle-wrapper.jar \\\n  https://github.com/gradle/gradle/raw/v8.6.0/gradle/wrapper/gradle-wrapper.jar\n\
+        echo \"Gradle wrapper jar downloaded: $(ls -lh gradle/wrapper/gradle-wrapper.jar)\"\
+        \n"
     - name: Accept Android SDK licenses and install platform
       run: 'SDKMANAGER="/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager"
 
@@ -92,6 +100,10 @@ jobs:
       with:
         java-version: '17'
         distribution: temurin
+    - name: Download Gradle wrapper jar
+      run: "curl -fsSL -o gradle/wrapper/gradle-wrapper.jar \\\n  https://github.com/gradle/gradle/raw/v8.6.0/gradle/wrapper/gradle-wrapper.jar\n\
+        echo \"Gradle wrapper jar downloaded: $(ls -lh gradle/wrapper/gradle-wrapper.jar)\"\
+        \n"
     - name: Accept Android SDK licenses and install platform
       run: 'SDKMANAGER="/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager"
 

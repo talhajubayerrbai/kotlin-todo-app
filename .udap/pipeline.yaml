@@ -19,6 +19,11 @@ stages:
         with:
           java-version: "17"
           distribution: temurin
+      - name: Download Gradle wrapper jar
+        run: |
+          curl -fsSL -o gradle/wrapper/gradle-wrapper.jar \
+            https://github.com/gradle/gradle/raw/v8.6.0/gradle/wrapper/gradle-wrapper.jar
+          echo "Gradle wrapper jar downloaded: $(ls -lh gradle/wrapper/gradle-wrapper.jar)"
       - name: Accept Android SDK licenses and install platform
         run: |
           SDKMANAGER="/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager"
@@ -46,6 +51,11 @@ stages:
         with:
           java-version: "17"
           distribution: temurin
+      - name: Download Gradle wrapper jar
+        run: |
+          curl -fsSL -o gradle/wrapper/gradle-wrapper.jar \
+            https://github.com/gradle/gradle/raw/v8.6.0/gradle/wrapper/gradle-wrapper.jar
+          echo "Gradle wrapper jar downloaded: $(ls -lh gradle/wrapper/gradle-wrapper.jar)"
       - name: Accept Android SDK licenses and install platform
         run: |
           SDKMANAGER="/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager"
@@ -85,6 +95,11 @@ stages:
         with:
           java-version: "17"
           distribution: temurin
+      - name: Download Gradle wrapper jar
+        run: |
+          curl -fsSL -o gradle/wrapper/gradle-wrapper.jar \
+            https://github.com/gradle/gradle/raw/v8.6.0/gradle/wrapper/gradle-wrapper.jar
+          echo "Gradle wrapper jar downloaded: $(ls -lh gradle/wrapper/gradle-wrapper.jar)"
       - name: Accept Android SDK licenses and install platform
         run: |
           SDKMANAGER="/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager"
