@@ -18,9 +18,10 @@ jobs:
         java-version: '17'
         distribution: temurin
     - name: Download Gradle wrapper jar
-      run: "curl -fsSL -o gradle/wrapper/gradle-wrapper.jar \\\n  https://github.com/gradle/gradle/raw/v8.6.0/gradle/wrapper/gradle-wrapper.jar\n\
-        echo \"Gradle wrapper jar downloaded: $(ls -lh gradle/wrapper/gradle-wrapper.jar)\"\
-        \n"
+      run: "curl -fsSL -o gradle/wrapper/gradle-wrapper.jar \\\n  https://services.gradle.org/distributions/gradle-8.6-wrapper.jar\n\
+        JAR_SIZE=$(stat -c%s gradle/wrapper/gradle-wrapper.jar)\necho \"Gradle wrapper\
+        \ jar: ${JAR_SIZE} bytes\"\nif [ \"$JAR_SIZE\" -lt 10000 ]; then\n  echo \"\
+        ERROR: wrapper jar too small, download likely failed\"\n  exit 1\nfi\n"
     - name: Accept Android SDK licenses and install platform
       run: 'SDKMANAGER="/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager"
 
@@ -53,9 +54,10 @@ jobs:
         java-version: '17'
         distribution: temurin
     - name: Download Gradle wrapper jar
-      run: "curl -fsSL -o gradle/wrapper/gradle-wrapper.jar \\\n  https://github.com/gradle/gradle/raw/v8.6.0/gradle/wrapper/gradle-wrapper.jar\n\
-        echo \"Gradle wrapper jar downloaded: $(ls -lh gradle/wrapper/gradle-wrapper.jar)\"\
-        \n"
+      run: "curl -fsSL -o gradle/wrapper/gradle-wrapper.jar \\\n  https://services.gradle.org/distributions/gradle-8.6-wrapper.jar\n\
+        JAR_SIZE=$(stat -c%s gradle/wrapper/gradle-wrapper.jar)\necho \"Gradle wrapper\
+        \ jar: ${JAR_SIZE} bytes\"\nif [ \"$JAR_SIZE\" -lt 10000 ]; then\n  echo \"\
+        ERROR: wrapper jar too small, download likely failed\"\n  exit 1\nfi\n"
     - name: Accept Android SDK licenses and install platform
       run: 'SDKMANAGER="/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager"
 
@@ -101,9 +103,10 @@ jobs:
         java-version: '17'
         distribution: temurin
     - name: Download Gradle wrapper jar
-      run: "curl -fsSL -o gradle/wrapper/gradle-wrapper.jar \\\n  https://github.com/gradle/gradle/raw/v8.6.0/gradle/wrapper/gradle-wrapper.jar\n\
-        echo \"Gradle wrapper jar downloaded: $(ls -lh gradle/wrapper/gradle-wrapper.jar)\"\
-        \n"
+      run: "curl -fsSL -o gradle/wrapper/gradle-wrapper.jar \\\n  https://services.gradle.org/distributions/gradle-8.6-wrapper.jar\n\
+        JAR_SIZE=$(stat -c%s gradle/wrapper/gradle-wrapper.jar)\necho \"Gradle wrapper\
+        \ jar: ${JAR_SIZE} bytes\"\nif [ \"$JAR_SIZE\" -lt 10000 ]; then\n  echo \"\
+        ERROR: wrapper jar too small, download likely failed\"\n  exit 1\nfi\n"
     - name: Accept Android SDK licenses and install platform
       run: 'SDKMANAGER="/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager"
 
