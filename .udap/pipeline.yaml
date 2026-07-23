@@ -16,7 +16,8 @@ stages:
         with:
           java-version: "17"
           distribution: temurin
-          cache: gradle
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
       - name: Run Android Lint
@@ -38,7 +39,8 @@ stages:
         with:
           java-version: "17"
           distribution: temurin
-          cache: gradle
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
       - name: Run Unit Tests
@@ -68,7 +70,8 @@ stages:
         with:
           java-version: "17"
           distribution: temurin
-          cache: gradle
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
       - name: Build Debug APK
@@ -85,6 +88,15 @@ stages:
     needs: [configure]
     timeout_minutes: 5
     steps:
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: temurin
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
       - name: Verify APK exists
         run: |
           APK_PATH="app/build/outputs/apk/debug/app-debug.apk"

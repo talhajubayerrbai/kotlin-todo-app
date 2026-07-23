@@ -14,7 +14,8 @@ jobs:
       with:
         java-version: '17'
         distribution: temurin
-        cache: gradle
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
     - name: Run Android Lint
@@ -37,7 +38,8 @@ jobs:
       with:
         java-version: '17'
         distribution: temurin
-        cache: gradle
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
     - name: Run Unit Tests
@@ -69,7 +71,8 @@ jobs:
       with:
         java-version: '17'
         distribution: temurin
-        cache: gradle
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
     - name: Build Debug APK
@@ -87,6 +90,15 @@ jobs:
     timeout-minutes: 5
     steps:
     - uses: actions/checkout@v4
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: temurin
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
     - name: Verify APK exists
       run: "APK_PATH=\"app/build/outputs/apk/debug/app-debug.apk\"\nif [ ! -f \"$APK_PATH\"\
         \ ]; then\n  echo \"ERROR: Debug APK not found at $APK_PATH\"\n  exit 1\n\
