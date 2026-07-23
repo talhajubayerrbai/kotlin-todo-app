@@ -167,7 +167,7 @@ pipelines:
       - id: run-ui-tests
         kind: custom
         needs: [provision-ec2]
-        timeout_minutes: 60
+        timeout_minutes: 90
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
           ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
@@ -224,7 +224,7 @@ pipelines:
                 if ! java -version 2>&1 | grep -q '17'; then
                   export DEBIAN_FRONTEND=noninteractive
                   sudo apt-get update -qq
-                  sudo apt-get install -y -qq openjdk-17-jdk wget unzip curl
+                  sudo apt-get install -y -qq openjdk-17-jdk wget unzip curl libpulse0 libnss3
                 fi
 
                 # ── Android SDK command-line tools ─────────────────────────
@@ -241,7 +241,8 @@ pipelines:
                   echo "Android SDK cmdline-tools already present — skipping"
                 fi
 
-                # ── SDK packages: platform-tools, emulator, system image ───
+                # ── SDK packages: platform-tools, emulator, arm64 system image ──
+                # arm64-v8a runs via QEMU TCG — no KVM needed on t3.large
                 if [ ! -d "$ANDROID_HOME/platform-tools" ]; then
                   yes | sdkmanager --licenses > /dev/null 2>&1
                   sdkmanager \
@@ -249,52 +250,57 @@ pipelines:
                     "emulator" \
                     "platforms;android-34" \
                     "build-tools;34.0.0" \
-                    "system-images;android-34;google_apis;x86_64"
-                  echo "SDK packages installed"
+                    "system-images;android-34;google_apis;arm64-v8a"
+                  echo "SDK packages installed (arm64-v8a system image)"
                 else
                   echo "SDK packages already present — skipping"
                 fi
 
                 # ── AVD ────────────────────────────────────────────────────
-                if ! avdmanager list avd 2>/dev/null | grep -q 'test_avd'; then
-                  echo "no" | avdmanager create avd \
+                if ! "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" list avd 2>/dev/null | grep -q 'test_avd'; then
+                  echo "no" | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
                     -n test_avd \
-                    -k "system-images;android-34;google_apis;x86_64" \
+                    -k "system-images;android-34;google_apis;arm64-v8a" \
                     --force
-                  echo "AVD created"
+                  echo "AVD created (arm64-v8a)"
                 else
                   echo "AVD test_avd already exists — skipping"
                 fi
 
-                # ── Emulator: start only if not already running ────────────
+                # ── Emulator: always check adb devices, start if not running ──
                 ADB="$ANDROID_HOME/platform-tools/adb"
-                BOOT=$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)
-                if [ "$BOOT" != "1" ]; then
-                  echo "Starting emulator..."
+                DEVICES=$("$ADB" devices 2>/dev/null | grep -v "List of" | grep -v "^$" | grep "emulator" || true)
+                if [ -z "$DEVICES" ]; then
+                  echo "Emulator not running — starting (arm64 QEMU TCG, no KVM required)..."
                   nohup "$ANDROID_HOME/emulator/emulator" \
                     -avd test_avd \
                     -no-window \
                     -no-audio \
-                    -gpu swiftshader_indirect \
                     -no-boot-anim \
-                    -memory 2048 \
+                    -memory 3072 \
                     > /tmp/emulator.log 2>&1 &
-                  echo "Waiting for emulator boot (up to 10 min)..."
-                  for i in $(seq 1 60); do
+                  echo "Waiting for emulator boot (up to 15 min — arm64 QEMU is slower)..."
+                  for i in $(seq 1 90); do
                     BOOT=$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)
                     if [ "$BOOT" = "1" ]; then
                       echo "Emulator booted after $((i * 10))s"
+                      "$ADB" shell input keyevent 82
                       break
                     fi
-                    echo "Boot check $i/60..."
+                    if [ "$i" = "90" ]; then
+                      echo "ERROR: Emulator did not boot within 15 minutes"
+                      cat /tmp/emulator.log | tail -30
+                      exit 1
+                    fi
+                    echo "Boot check $i/90..."
                     sleep 10
                   done
                 else
-                  echo "Emulator already running and booted — skipping start"
+                  echo "Emulator already running: $DEVICES — skipping start"
                 fi
 
                 # ── Maestro ────────────────────────────────────────────────
-                if ! command -v maestro > /dev/null 2>&1 && [ ! -f "$HOME/.maestro/bin/maestro" ]; then
+                if [ ! -f "$HOME/.maestro/bin/maestro" ]; then
                   export MAESTRO_VERSION=1.39.0
                   curl -fsSL "https://get.maestro.mobile.dev" | bash
                   echo "Maestro installed"
@@ -306,7 +312,6 @@ pipelines:
           - name: Copy APK and Maestro flows to EC2
             run: |
               EC2_IP="${{ needs.provision-ec2.outputs.ec2_ip }}"
-              # Ensure destination dirs exist
               ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ubuntu@"$EC2_IP" \
                 "mkdir -p /tmp/maestro"
               scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
@@ -377,8 +382,7 @@ pipelines:
           TF_VAR_ssh_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
         steps:
           - name: Only destroy on test success
-            run: |
-              echo "Tests passed — destroying EC2 now"
+            run: echo "Tests passed — destroying EC2 now"
           - name: Set up Terraform
             uses: hashicorp/setup-terraform@v3
             with:
