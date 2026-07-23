@@ -19,14 +19,19 @@ stages:
         with:
           java-version: "17"
           distribution: temurin
-      - name: Download Gradle wrapper jar
+      - name: Bootstrap Gradle wrapper jar from distribution zip
         run: |
-          curl -fsSL -o gradle/wrapper/gradle-wrapper.jar \
-            https://services.gradle.org/distributions/gradle-8.6-wrapper.jar
+          curl -fsSL -o /tmp/gradle-8.6-bin.zip \
+            https://services.gradle.org/distributions/gradle-8.6-bin.zip
+          unzip -j /tmp/gradle-8.6-bin.zip \
+            "gradle-8.6/lib/gradle-wrapper-*.jar" \
+            -d /tmp/gradle-wrapper-extracted/
+          cp /tmp/gradle-wrapper-extracted/gradle-wrapper-*.jar \
+            gradle/wrapper/gradle-wrapper.jar
           JAR_SIZE=$(stat -c%s gradle/wrapper/gradle-wrapper.jar)
-          echo "Gradle wrapper jar: ${JAR_SIZE} bytes"
+          echo "Gradle wrapper jar bootstrapped: ${JAR_SIZE} bytes"
           if [ "$JAR_SIZE" -lt 10000 ]; then
-            echo "ERROR: wrapper jar too small, download likely failed"
+            echo "ERROR: wrapper jar too small"
             exit 1
           fi
       - name: Accept Android SDK licenses and install platform
@@ -56,14 +61,19 @@ stages:
         with:
           java-version: "17"
           distribution: temurin
-      - name: Download Gradle wrapper jar
+      - name: Bootstrap Gradle wrapper jar from distribution zip
         run: |
-          curl -fsSL -o gradle/wrapper/gradle-wrapper.jar \
-            https://services.gradle.org/distributions/gradle-8.6-wrapper.jar
+          curl -fsSL -o /tmp/gradle-8.6-bin.zip \
+            https://services.gradle.org/distributions/gradle-8.6-bin.zip
+          unzip -j /tmp/gradle-8.6-bin.zip \
+            "gradle-8.6/lib/gradle-wrapper-*.jar" \
+            -d /tmp/gradle-wrapper-extracted/
+          cp /tmp/gradle-wrapper-extracted/gradle-wrapper-*.jar \
+            gradle/wrapper/gradle-wrapper.jar
           JAR_SIZE=$(stat -c%s gradle/wrapper/gradle-wrapper.jar)
-          echo "Gradle wrapper jar: ${JAR_SIZE} bytes"
+          echo "Gradle wrapper jar bootstrapped: ${JAR_SIZE} bytes"
           if [ "$JAR_SIZE" -lt 10000 ]; then
-            echo "ERROR: wrapper jar too small, download likely failed"
+            echo "ERROR: wrapper jar too small"
             exit 1
           fi
       - name: Accept Android SDK licenses and install platform
@@ -105,14 +115,19 @@ stages:
         with:
           java-version: "17"
           distribution: temurin
-      - name: Download Gradle wrapper jar
+      - name: Bootstrap Gradle wrapper jar from distribution zip
         run: |
-          curl -fsSL -o gradle/wrapper/gradle-wrapper.jar \
-            https://services.gradle.org/distributions/gradle-8.6-wrapper.jar
+          curl -fsSL -o /tmp/gradle-8.6-bin.zip \
+            https://services.gradle.org/distributions/gradle-8.6-bin.zip
+          unzip -j /tmp/gradle-8.6-bin.zip \
+            "gradle-8.6/lib/gradle-wrapper-*.jar" \
+            -d /tmp/gradle-wrapper-extracted/
+          cp /tmp/gradle-wrapper-extracted/gradle-wrapper-*.jar \
+            gradle/wrapper/gradle-wrapper.jar
           JAR_SIZE=$(stat -c%s gradle/wrapper/gradle-wrapper.jar)
-          echo "Gradle wrapper jar: ${JAR_SIZE} bytes"
+          echo "Gradle wrapper jar bootstrapped: ${JAR_SIZE} bytes"
           if [ "$JAR_SIZE" -lt 10000 ]; then
-            echo "ERROR: wrapper jar too small, download likely failed"
+            echo "ERROR: wrapper jar too small"
             exit 1
           fi
       - name: Accept Android SDK licenses and install platform
