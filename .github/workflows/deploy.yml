@@ -17,13 +17,6 @@ jobs:
       with:
         java-version: '17'
         distribution: temurin
-    - name: Bootstrap Gradle wrapper jar from distribution zip
-      run: "curl -fsSL -o /tmp/gradle-8.6-bin.zip \\\n  https://services.gradle.org/distributions/gradle-8.6-bin.zip\n\
-        unzip -j /tmp/gradle-8.6-bin.zip \\\n  \"gradle-8.6/lib/gradle-wrapper-*.jar\"\
-        \ \\\n  -d /tmp/gradle-wrapper-extracted/\ncp /tmp/gradle-wrapper-extracted/gradle-wrapper-*.jar\
-        \ \\\n  gradle/wrapper/gradle-wrapper.jar\nJAR_SIZE=$(stat -c%s gradle/wrapper/gradle-wrapper.jar)\n\
-        echo \"Gradle wrapper jar bootstrapped: ${JAR_SIZE} bytes\"\nif [ \"$JAR_SIZE\"\
-        \ -lt 10000 ]; then\n  echo \"ERROR: wrapper jar too small\"\n  exit 1\nfi\n"
     - name: Accept Android SDK licenses and install platform
       run: 'SDKMANAGER="/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager"
 
@@ -32,16 +25,15 @@ jobs:
         "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0"
 
         '
-    - name: Setup Gradle
+    - name: Setup Gradle 8.6
       uses: gradle/actions/setup-gradle@v4
       with:
+        gradle-version: '8.6'
         validate-wrappers: false
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
     - name: Compile Kotlin sources (lint check)
-      run: ./gradlew compileDebugKotlin
+      run: gradle compileDebugKotlin
     - name: Run Android Lint (non-blocking)
-      run: ./gradlew lintDebug || echo "Lint completed (warnings may exist)"
+      run: gradle lintDebug || echo "Lint completed (warnings may exist)"
   test:
     runs-on: ubuntu-latest
     needs:
@@ -57,13 +49,6 @@ jobs:
       with:
         java-version: '17'
         distribution: temurin
-    - name: Bootstrap Gradle wrapper jar from distribution zip
-      run: "curl -fsSL -o /tmp/gradle-8.6-bin.zip \\\n  https://services.gradle.org/distributions/gradle-8.6-bin.zip\n\
-        unzip -j /tmp/gradle-8.6-bin.zip \\\n  \"gradle-8.6/lib/gradle-wrapper-*.jar\"\
-        \ \\\n  -d /tmp/gradle-wrapper-extracted/\ncp /tmp/gradle-wrapper-extracted/gradle-wrapper-*.jar\
-        \ \\\n  gradle/wrapper/gradle-wrapper.jar\nJAR_SIZE=$(stat -c%s gradle/wrapper/gradle-wrapper.jar)\n\
-        echo \"Gradle wrapper jar bootstrapped: ${JAR_SIZE} bytes\"\nif [ \"$JAR_SIZE\"\
-        \ -lt 10000 ]; then\n  echo \"ERROR: wrapper jar too small\"\n  exit 1\nfi\n"
     - name: Accept Android SDK licenses and install platform
       run: 'SDKMANAGER="/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager"
 
@@ -72,14 +57,13 @@ jobs:
         "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0"
 
         '
-    - name: Setup Gradle
+    - name: Setup Gradle 8.6
       uses: gradle/actions/setup-gradle@v4
       with:
+        gradle-version: '8.6'
         validate-wrappers: false
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
     - name: Run Unit Tests
-      run: ./gradlew test
+      run: gradle test
     - name: Upload Test Results
       uses: actions/upload-artifact@v4
       with:
@@ -110,13 +94,6 @@ jobs:
       with:
         java-version: '17'
         distribution: temurin
-    - name: Bootstrap Gradle wrapper jar from distribution zip
-      run: "curl -fsSL -o /tmp/gradle-8.6-bin.zip \\\n  https://services.gradle.org/distributions/gradle-8.6-bin.zip\n\
-        unzip -j /tmp/gradle-8.6-bin.zip \\\n  \"gradle-8.6/lib/gradle-wrapper-*.jar\"\
-        \ \\\n  -d /tmp/gradle-wrapper-extracted/\ncp /tmp/gradle-wrapper-extracted/gradle-wrapper-*.jar\
-        \ \\\n  gradle/wrapper/gradle-wrapper.jar\nJAR_SIZE=$(stat -c%s gradle/wrapper/gradle-wrapper.jar)\n\
-        echo \"Gradle wrapper jar bootstrapped: ${JAR_SIZE} bytes\"\nif [ \"$JAR_SIZE\"\
-        \ -lt 10000 ]; then\n  echo \"ERROR: wrapper jar too small\"\n  exit 1\nfi\n"
     - name: Accept Android SDK licenses and install platform
       run: 'SDKMANAGER="/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager"
 
@@ -125,14 +102,13 @@ jobs:
         "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0"
 
         '
-    - name: Setup Gradle
+    - name: Setup Gradle 8.6
       uses: gradle/actions/setup-gradle@v4
       with:
+        gradle-version: '8.6'
         validate-wrappers: false
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
     - name: Build Debug APK
-      run: ./gradlew assembleDebug
+      run: gradle assembleDebug
     - name: Upload Debug APK
       uses: actions/upload-artifact@v4
       with:

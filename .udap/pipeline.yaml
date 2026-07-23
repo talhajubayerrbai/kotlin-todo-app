@@ -19,36 +19,20 @@ stages:
         with:
           java-version: "17"
           distribution: temurin
-      - name: Bootstrap Gradle wrapper jar from distribution zip
-        run: |
-          curl -fsSL -o /tmp/gradle-8.6-bin.zip \
-            https://services.gradle.org/distributions/gradle-8.6-bin.zip
-          unzip -j /tmp/gradle-8.6-bin.zip \
-            "gradle-8.6/lib/gradle-wrapper-*.jar" \
-            -d /tmp/gradle-wrapper-extracted/
-          cp /tmp/gradle-wrapper-extracted/gradle-wrapper-*.jar \
-            gradle/wrapper/gradle-wrapper.jar
-          JAR_SIZE=$(stat -c%s gradle/wrapper/gradle-wrapper.jar)
-          echo "Gradle wrapper jar bootstrapped: ${JAR_SIZE} bytes"
-          if [ "$JAR_SIZE" -lt 10000 ]; then
-            echo "ERROR: wrapper jar too small"
-            exit 1
-          fi
       - name: Accept Android SDK licenses and install platform
         run: |
           SDKMANAGER="/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses
           "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0"
-      - name: Setup Gradle
+      - name: Setup Gradle 8.6
         uses: gradle/actions/setup-gradle@v4
         with:
+          gradle-version: "8.6"
           validate-wrappers: false
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
       - name: Compile Kotlin sources (lint check)
-        run: ./gradlew compileDebugKotlin
+        run: gradle compileDebugKotlin
       - name: Run Android Lint (non-blocking)
-        run: ./gradlew lintDebug || echo "Lint completed (warnings may exist)"
+        run: gradle lintDebug || echo "Lint completed (warnings may exist)"
 
   - id: test
     kind: test
@@ -63,34 +47,18 @@ stages:
         with:
           java-version: "17"
           distribution: temurin
-      - name: Bootstrap Gradle wrapper jar from distribution zip
-        run: |
-          curl -fsSL -o /tmp/gradle-8.6-bin.zip \
-            https://services.gradle.org/distributions/gradle-8.6-bin.zip
-          unzip -j /tmp/gradle-8.6-bin.zip \
-            "gradle-8.6/lib/gradle-wrapper-*.jar" \
-            -d /tmp/gradle-wrapper-extracted/
-          cp /tmp/gradle-wrapper-extracted/gradle-wrapper-*.jar \
-            gradle/wrapper/gradle-wrapper.jar
-          JAR_SIZE=$(stat -c%s gradle/wrapper/gradle-wrapper.jar)
-          echo "Gradle wrapper jar bootstrapped: ${JAR_SIZE} bytes"
-          if [ "$JAR_SIZE" -lt 10000 ]; then
-            echo "ERROR: wrapper jar too small"
-            exit 1
-          fi
       - name: Accept Android SDK licenses and install platform
         run: |
           SDKMANAGER="/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses
           "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0"
-      - name: Setup Gradle
+      - name: Setup Gradle 8.6
         uses: gradle/actions/setup-gradle@v4
         with:
+          gradle-version: "8.6"
           validate-wrappers: false
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
       - name: Run Unit Tests
-        run: ./gradlew test
+        run: gradle test
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
         with:
@@ -119,34 +87,18 @@ stages:
         with:
           java-version: "17"
           distribution: temurin
-      - name: Bootstrap Gradle wrapper jar from distribution zip
-        run: |
-          curl -fsSL -o /tmp/gradle-8.6-bin.zip \
-            https://services.gradle.org/distributions/gradle-8.6-bin.zip
-          unzip -j /tmp/gradle-8.6-bin.zip \
-            "gradle-8.6/lib/gradle-wrapper-*.jar" \
-            -d /tmp/gradle-wrapper-extracted/
-          cp /tmp/gradle-wrapper-extracted/gradle-wrapper-*.jar \
-            gradle/wrapper/gradle-wrapper.jar
-          JAR_SIZE=$(stat -c%s gradle/wrapper/gradle-wrapper.jar)
-          echo "Gradle wrapper jar bootstrapped: ${JAR_SIZE} bytes"
-          if [ "$JAR_SIZE" -lt 10000 ]; then
-            echo "ERROR: wrapper jar too small"
-            exit 1
-          fi
       - name: Accept Android SDK licenses and install platform
         run: |
           SDKMANAGER="/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses
           "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0"
-      - name: Setup Gradle
+      - name: Setup Gradle 8.6
         uses: gradle/actions/setup-gradle@v4
         with:
+          gradle-version: "8.6"
           validate-wrappers: false
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
       - name: Build Debug APK
-        run: ./gradlew assembleDebug
+        run: gradle assembleDebug
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
