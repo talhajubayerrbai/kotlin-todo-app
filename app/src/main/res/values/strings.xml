@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Kotlin Todo</string>
+    <string name="hint_new_todo">What needs to be done?</string>
+    <string name="add">Add</string>
+    <string name="empty_state">🎉 All done! Add a new task above.</string>
+    <string name="error_empty_todo">Please enter a task</string>
+    <string name="delete_todo">Delete todo</string>
+    <string name="cleared_completed">Completed tasks cleared</string>
+    <string name="action_clear_completed">Clear completed</string>
+</resources>

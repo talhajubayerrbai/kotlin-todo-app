@@ -1,0 +1,19 @@
+# udap:meta cloud=aws region=us-east-1 target=ec2
+
+developer: Developer { shape: rectangle; udap-type: generic.user }
+cicd: GitHub Actions CI { shape: rectangle; udap-type: generic.app }
+pipeline: Build Pipeline {
+  lint: Lint & Static Analysis { shape: rectangle; udap-type: generic.app }
+  test: Unit Tests (JUnit) { shape: rectangle; udap-type: generic.app }
+  build: Build Debug APK { shape: rectangle; udap-type: generic.app }
+  artifact: APK Artifact (GitHub) { shape: rectangle; udap-type: generic.app }
+}
+app: Android Todo App (Kotlin) { shape: rectangle; udap-type: generic.app }
+db: Room DB (SQLite) { shape: rectangle; udap-type: generic.db }
+
+developer -> cicd: git push / PR
+cicd -> pipeline.lint: trigger
+pipeline.lint -> pipeline.test: pass
+pipeline.test -> pipeline.build: pass
+pipeline.build -> pipeline.artifact: upload APK
+app -> db: read/write todos
