@@ -42,14 +42,32 @@ jobs:
     runs-on: ubuntu-latest
     needs:
     - provision-ec2
-    timeout-minutes: 45
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    timeout-minutes: 60
     steps:
     - uses: actions/checkout@v4
-    - name: Download APK artifact
-      uses: actions/download-artifact@v4
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
       with:
-        name: kotlin-todo-app-debug
-        path: apk-download
+        java-version: '17'
+        distribution: temurin
+    - name: Accept Android SDK licenses and install platform
+      run: 'SDKMANAGER="/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager"
+
+        yes | "$SDKMANAGER" --licenses
+
+        "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0"
+
+        '
+    - name: Setup Gradle 8.6
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        gradle-version: '8.6'
+        validate-wrappers: false
+    - name: Build Debug APK
+      run: gradle assembleDebug
     - name: Write SSH key
       run: 'mkdir -p ~/.ssh
 
@@ -71,9 +89,9 @@ jobs:
     - name: Install Android SDK and Maestro on EC2
       run: "EC2_IP=\"${{ needs.provision-ec2.outputs.ec2_ip }}\"\nssh -i ~/.ssh/deploy_key\
         \ -o StrictHostKeyChecking=no ubuntu@\"$EC2_IP\" bash << 'ENDSSH'\n  set -e\n\
-        \  export DEBIAN_FRONTEND=noninteractive\n\n  # Java 17 (in Ubuntu 22.04 default\
-        \ repos)\n  sudo apt-get update -qq\n  sudo apt-get install -y -qq openjdk-17-jdk\
-        \ wget unzip curl\n\n  # Android SDK command-line tools\n  export ANDROID_HOME=/opt/android-sdk\n\
+        \  export DEBIAN_FRONTEND=noninteractive\n\n  # Java 17\n  sudo apt-get update\
+        \ -qq\n  sudo apt-get install -y -qq openjdk-17-jdk wget unzip curl\n\n  #\
+        \ Android SDK command-line tools\n  export ANDROID_HOME=/opt/android-sdk\n\
         \  sudo mkdir -p \"$ANDROID_HOME/cmdline-tools\"\n  sudo chown -R ubuntu:ubuntu\
         \ \"$ANDROID_HOME\"\n  cd /tmp\n  wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip\
         \ \\\n       -O cmdline-tools.zip\n  unzip -q cmdline-tools.zip -d /tmp/clt-extract\n\
@@ -99,8 +117,8 @@ jobs:
         \nENDSSH\n"
     - name: Copy APK and Maestro flows to EC2
       run: "EC2_IP=\"${{ needs.provision-ec2.outputs.ec2_ip }}\"\nscp -i ~/.ssh/deploy_key\
-        \ -o StrictHostKeyChecking=no \\\n  apk-download/app-debug.apk ubuntu@\"$EC2_IP\"\
-        :/tmp/app-debug.apk\nscp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no\
+        \ -o StrictHostKeyChecking=no \\\n  app/build/outputs/apk/debug/app-debug.apk\
+        \ ubuntu@\"$EC2_IP\":/tmp/app-debug.apk\nscp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no\
         \ \\\n  -r maestro/ ubuntu@\"$EC2_IP\":/tmp/maestro/\n"
     - name: Run Maestro tests with screen recording
       run: "EC2_IP=\"${{ needs.provision-ec2.outputs.ec2_ip }}\"\nssh -i ~/.ssh/deploy_key\
@@ -110,10 +128,9 @@ jobs:
         \ install /tmp/app-debug.apk\n\n  # Start screen recording in background\n\
         \  \"$ADB\" shell screenrecord /sdcard/ui-test-recording.mp4 &\n  RECORD_PID=$!\n\
         \  echo \"Screen recording started (PID $RECORD_PID)\"\n\n  # Run all Maestro\
-        \ flows (non-fatal so recording always stops)\n  maestro test /tmp/maestro/\
-        \ --output /tmp/maestro-report.xml || true\n\n  # Stop recording gracefully\n\
-        \  sleep 2\n  kill $RECORD_PID 2>/dev/null || true\n  sleep 3\n\n  # Pull\
-        \ artifacts to local paths\n  \"$ADB\" pull /sdcard/ui-test-recording.mp4\
+        \ flows\n  maestro test /tmp/maestro/ --output /tmp/maestro-report.xml ||\
+        \ true\n\n  # Stop recording gracefully\n  sleep 2\n  kill $RECORD_PID 2>/dev/null\
+        \ || true\n  sleep 3\n\n  # Pull recording from device\n  \"$ADB\" pull /sdcard/ui-test-recording.mp4\
         \ /tmp/ui-test-recording.mp4 || true\n  echo \"All tests complete\"\nENDSSH\n"
     - name: Pull artifacts from EC2
       run: "EC2_IP=\"${{ needs.provision-ec2.outputs.ec2_ip }}\"\nmkdir -p ui-test-artifacts\n\
