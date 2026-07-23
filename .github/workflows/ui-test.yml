@@ -27,7 +27,7 @@ jobs:
         \ }}/uitest/terraform.tfstate\" \\\n  -backend-config=\"region=us-east-1\"\
         \n"
       working-directory: infra/uitest
-    - name: Terraform Apply
+    - name: Terraform Apply (reuse existing EC2 if already up)
       run: terraform apply -input=false -auto-approve
       working-directory: infra/uitest
     - id: get_ip
@@ -86,52 +86,84 @@ jobs:
         SSH is up\"\n    ssh-keyscan -H \"$EC2_IP\" >> ~/.ssh/known_hosts 2>/dev/null\n\
         \    break\n  fi\n  echo \"Attempt $i/30 \u2014 waiting 10s...\"\n  sleep\
         \ 10\ndone\n"
-    - name: Install Android SDK and Maestro on EC2
+    - name: "Idempotent setup \u2014 Android SDK + emulator + Maestro"
       run: "EC2_IP=\"${{ needs.provision-ec2.outputs.ec2_ip }}\"\nssh -i ~/.ssh/deploy_key\
         \ -o StrictHostKeyChecking=no ubuntu@\"$EC2_IP\" bash << 'ENDSSH'\n  set -e\n\
-        \  export DEBIAN_FRONTEND=noninteractive\n\n  # Java 17\n  sudo apt-get update\
-        \ -qq\n  sudo apt-get install -y -qq openjdk-17-jdk wget unzip curl\n\n  #\
-        \ Android SDK command-line tools\n  export ANDROID_HOME=/opt/android-sdk\n\
-        \  sudo mkdir -p \"$ANDROID_HOME/cmdline-tools\"\n  sudo chown -R ubuntu:ubuntu\
-        \ \"$ANDROID_HOME\"\n  cd /tmp\n  wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip\
-        \ \\\n       -O cmdline-tools.zip\n  unzip -q cmdline-tools.zip -d /tmp/clt-extract\n\
-        \  mv /tmp/clt-extract/cmdline-tools \"$ANDROID_HOME/cmdline-tools/latest\"\
-        \n\n  export PATH=\"$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH\"\
-        \n\n  # Accept licenses and install packages\n  yes | sdkmanager --licenses\
-        \ > /dev/null 2>&1\n  sdkmanager \\\n    \"platform-tools\" \\\n    \"emulator\"\
-        \ \\\n    \"platforms;android-34\" \\\n    \"build-tools;34.0.0\" \\\n   \
-        \ \"system-images;android-34;google_apis;x86_64\"\n\n  # Create AVD\n  echo\
-        \ \"no\" | avdmanager create avd \\\n    -n test_avd \\\n    -k \"system-images;android-34;google_apis;x86_64\"\
-        \ \\\n    --force\n\n  # Start emulator in background (software rendering\
-        \ \u2014 no KVM needed)\n  nohup \"$ANDROID_HOME/emulator/emulator\" \\\n\
-        \    -avd test_avd \\\n    -no-window \\\n    -no-audio \\\n    -gpu swiftshader_indirect\
-        \ \\\n    -no-boot-anim \\\n    -memory 2048 \\\n    > /tmp/emulator.log 2>&1\
-        \ &\n\n  # Wait for emulator to fully boot (up to 10 minutes)\n  echo \"Waiting\
-        \ for emulator boot...\"\n  ADB=\"$ANDROID_HOME/platform-tools/adb\"\n  for\
-        \ i in $(seq 1 60); do\n    BOOT=$(\"$ADB\" shell getprop sys.boot_completed\
-        \ 2>/dev/null | tr -d '\\r' || true)\n    if [ \"$BOOT\" = \"1\" ]; then\n\
-        \      echo \"Emulator booted after $((i * 10))s\"\n      break\n    fi\n\
-        \    echo \"Boot check $i/60...\"\n    sleep 10\n  done\n\n  # Install Maestro\n\
-        \  export MAESTRO_VERSION=1.39.0\n  curl -fsSL \"https://get.maestro.mobile.dev\"\
-        \ | bash\n  echo \"Maestro installed: $($HOME/.maestro/bin/maestro --version)\"\
-        \nENDSSH\n"
+        \  export ANDROID_HOME=/opt/android-sdk\n  export PATH=\"$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$HOME/.maestro/bin:$PATH\"\
+        \n\n  # \u2500\u2500 Java 17 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
+        \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
+        \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
+        \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
+        \u2500\n  if ! java -version 2>&1 | grep -q '17'; then\n    export DEBIAN_FRONTEND=noninteractive\n\
+        \    sudo apt-get update -qq\n    sudo apt-get install -y -qq openjdk-17-jdk\
+        \ wget unzip curl\n  fi\n\n  # \u2500\u2500 Android SDK command-line tools\
+        \ \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
+        \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
+        \n  if [ ! -f \"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager\" ]; then\n\
+        \    sudo mkdir -p \"$ANDROID_HOME/cmdline-tools\"\n    sudo chown -R ubuntu:ubuntu\
+        \ \"$ANDROID_HOME\"\n    cd /tmp\n    wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip\
+        \ \\\n         -O cmdline-tools.zip\n    unzip -q cmdline-tools.zip -d /tmp/clt-extract\n\
+        \    mv /tmp/clt-extract/cmdline-tools \"$ANDROID_HOME/cmdline-tools/latest\"\
+        \n    echo \"Android SDK cmdline-tools installed\"\n  else\n    echo \"Android\
+        \ SDK cmdline-tools already present \u2014 skipping\"\n  fi\n\n  # \u2500\u2500\
+        \ SDK packages: platform-tools, emulator, system image \u2500\u2500\u2500\n\
+        \  if [ ! -d \"$ANDROID_HOME/platform-tools\" ]; then\n    yes | sdkmanager\
+        \ --licenses > /dev/null 2>&1\n    sdkmanager \\\n      \"platform-tools\"\
+        \ \\\n      \"emulator\" \\\n      \"platforms;android-34\" \\\n      \"build-tools;34.0.0\"\
+        \ \\\n      \"system-images;android-34;google_apis;x86_64\"\n    echo \"SDK\
+        \ packages installed\"\n  else\n    echo \"SDK packages already present \u2014\
+        \ skipping\"\n  fi\n\n  # \u2500\u2500 AVD \u2500\u2500\u2500\u2500\u2500\u2500\
+        \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
+        \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
+        \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
+        \u2500\u2500\u2500\u2500\u2500\u2500\u2500\n  if ! avdmanager list avd 2>/dev/null\
+        \ | grep -q 'test_avd'; then\n    echo \"no\" | avdmanager create avd \\\n\
+        \      -n test_avd \\\n      -k \"system-images;android-34;google_apis;x86_64\"\
+        \ \\\n      --force\n    echo \"AVD created\"\n  else\n    echo \"AVD test_avd\
+        \ already exists \u2014 skipping\"\n  fi\n\n  # \u2500\u2500 Emulator: start\
+        \ only if not already running \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
+        \u2500\u2500\u2500\u2500\n  ADB=\"$ANDROID_HOME/platform-tools/adb\"\n  BOOT=$(\"\
+        $ADB\" shell getprop sys.boot_completed 2>/dev/null | tr -d '\\r' || true)\n\
+        \  if [ \"$BOOT\" != \"1\" ]; then\n    echo \"Starting emulator...\"\n  \
+        \  nohup \"$ANDROID_HOME/emulator/emulator\" \\\n      -avd test_avd \\\n\
+        \      -no-window \\\n      -no-audio \\\n      -gpu swiftshader_indirect\
+        \ \\\n      -no-boot-anim \\\n      -memory 2048 \\\n      > /tmp/emulator.log\
+        \ 2>&1 &\n    echo \"Waiting for emulator boot (up to 10 min)...\"\n    for\
+        \ i in $(seq 1 60); do\n      BOOT=$(\"$ADB\" shell getprop sys.boot_completed\
+        \ 2>/dev/null | tr -d '\\r' || true)\n      if [ \"$BOOT\" = \"1\" ]; then\n\
+        \        echo \"Emulator booted after $((i * 10))s\"\n        break\n    \
+        \  fi\n      echo \"Boot check $i/60...\"\n      sleep 10\n    done\n  else\n\
+        \    echo \"Emulator already running and booted \u2014 skipping start\"\n\
+        \  fi\n\n  # \u2500\u2500 Maestro \u2500\u2500\u2500\u2500\u2500\u2500\u2500\
+        \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
+        \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
+        \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
+        \u2500\u2500\n  if ! command -v maestro > /dev/null 2>&1 && [ ! -f \"$HOME/.maestro/bin/maestro\"\
+        \ ]; then\n    export MAESTRO_VERSION=1.39.0\n    curl -fsSL \"https://get.maestro.mobile.dev\"\
+        \ | bash\n    echo \"Maestro installed\"\n  else\n    echo \"Maestro already\
+        \ installed \u2014 skipping\"\n  fi\n  echo \"Setup complete\"\nENDSSH\n"
     - name: Copy APK and Maestro flows to EC2
-      run: "EC2_IP=\"${{ needs.provision-ec2.outputs.ec2_ip }}\"\nscp -i ~/.ssh/deploy_key\
-        \ -o StrictHostKeyChecking=no \\\n  app/build/outputs/apk/debug/app-debug.apk\
-        \ ubuntu@\"$EC2_IP\":/tmp/app-debug.apk\nscp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no\
-        \ \\\n  -r maestro/ ubuntu@\"$EC2_IP\":/tmp/maestro/\n"
+      run: "EC2_IP=\"${{ needs.provision-ec2.outputs.ec2_ip }}\"\n# Ensure destination\
+        \ dirs exist\nssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ubuntu@\"\
+        $EC2_IP\" \\\n  \"mkdir -p /tmp/maestro\"\nscp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no\
+        \ \\\n  app/build/outputs/apk/debug/app-debug.apk ubuntu@\"$EC2_IP\":/tmp/app-debug.apk\n\
+        scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \\\n  -r maestro/ ubuntu@\"\
+        $EC2_IP\":/tmp/maestro/\n"
     - name: Run Maestro tests with screen recording
       run: "EC2_IP=\"${{ needs.provision-ec2.outputs.ec2_ip }}\"\nssh -i ~/.ssh/deploy_key\
         \ -o StrictHostKeyChecking=no ubuntu@\"$EC2_IP\" bash << 'ENDSSH'\n  set -e\n\
         \  export ANDROID_HOME=/opt/android-sdk\n  export PATH=\"$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$HOME/.maestro/bin:$PATH\"\
-        \n  ADB=\"$ANDROID_HOME/platform-tools/adb\"\n\n  # Install APK\n  \"$ADB\"\
-        \ install /tmp/app-debug.apk\n\n  # Start screen recording in background\n\
-        \  \"$ADB\" shell screenrecord /sdcard/ui-test-recording.mp4 &\n  RECORD_PID=$!\n\
-        \  echo \"Screen recording started (PID $RECORD_PID)\"\n\n  # Run all Maestro\
-        \ flows\n  maestro test /tmp/maestro/ --output /tmp/maestro-report.xml ||\
-        \ true\n\n  # Stop recording gracefully\n  sleep 2\n  kill $RECORD_PID 2>/dev/null\
-        \ || true\n  sleep 3\n\n  # Pull recording from device\n  \"$ADB\" pull /sdcard/ui-test-recording.mp4\
-        \ /tmp/ui-test-recording.mp4 || true\n  echo \"All tests complete\"\nENDSSH\n"
+        \n  ADB=\"$ANDROID_HOME/platform-tools/adb\"\n\n  # Reinstall APK fresh each\
+        \ run\n  \"$ADB\" uninstall com.example.kotlintodo 2>/dev/null || true\n \
+        \ \"$ADB\" install /tmp/app-debug.apk\n\n  # Stop any previous recording\n\
+        \  \"$ADB\" shell pkill -f screenrecord 2>/dev/null || true\n  sleep 1\n\n\
+        \  # Start screen recording\n  \"$ADB\" shell screenrecord /sdcard/ui-test-recording.mp4\
+        \ &\n  RECORD_PID=$!\n  echo \"Screen recording started (PID $RECORD_PID)\"\
+        \n\n  # Run all Maestro flows\n  maestro test /tmp/maestro/ --output /tmp/maestro-report.xml\
+        \ || MAESTRO_EXIT=$?\n\n  # Stop recording gracefully\n  sleep 2\n  kill $RECORD_PID\
+        \ 2>/dev/null || true\n  sleep 3\n\n  # Pull recording from device\n  \"$ADB\"\
+        \ pull /sdcard/ui-test-recording.mp4 /tmp/ui-test-recording.mp4 || true\n\n\
+        \  echo \"All tests complete\"\n  exit ${MAESTRO_EXIT:-0}\nENDSSH\n"
     - name: Pull artifacts from EC2
       run: "EC2_IP=\"${{ needs.provision-ec2.outputs.ec2_ip }}\"\nmkdir -p ui-test-artifacts\n\
         scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \\\n  ubuntu@\"$EC2_IP\"\
@@ -158,6 +190,8 @@ jobs:
     timeout-minutes: 10
     steps:
     - uses: actions/checkout@v4
+    - name: Only destroy on test success
+      run: "echo \"Tests passed \u2014 destroying EC2 now\"\n"
     - name: Set up Terraform
       uses: hashicorp/setup-terraform@v3
       with:
